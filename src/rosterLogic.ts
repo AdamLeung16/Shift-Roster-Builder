@@ -1,4 +1,4 @@
-import { DAYS, type Conflict, type Employee, type Shift } from "./types";
+import { WEEKDAYS, type Conflict, type DateString, type Employee, type Shift } from "./types";
 
 export function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
@@ -16,10 +16,79 @@ export function isValidShiftTime(startTime: string, endTime: string): boolean {
 export function shiftsOverlap(a: Shift, b: Shift): boolean {
   return (
     a.employeeId === b.employeeId &&
-    a.day === b.day &&
+    a.date === b.date &&
     timeToMinutes(a.startTime) < timeToMinutes(b.endTime) &&
     timeToMinutes(b.startTime) < timeToMinutes(a.endTime)
   );
+}
+
+export function toDateString(date: Date): DateString {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}` as DateString;
+}
+
+export function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+export function getWeekStart(date = new Date()): Date {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const mondayOffset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - mondayOffset);
+  return start;
+}
+
+export function getWeekDates(weekStart: Date): DateString[] {
+  return WEEKDAYS.map((_, index) => toDateString(addDays(weekStart, index)));
+}
+
+export function getMonthWeekStarts(year: number, monthIndex: number): DateString[] {
+  const firstDayOfMonth = new Date(year, monthIndex, 1);
+  const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
+  const weekStarts: DateString[] = [];
+  let cursor = getWeekStart(firstDayOfMonth);
+
+  while (cursor <= lastDayOfMonth) {
+    weekStarts.push(toDateString(cursor));
+    cursor = addDays(cursor, 7);
+  }
+
+  return weekStarts;
+}
+
+export function getMonthCalendarDates(year: number, monthIndex: number): DateString[] {
+  const firstDayOfMonth = new Date(year, monthIndex, 1);
+  const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
+  const calendarStart = getWeekStart(firstDayOfMonth);
+  const calendarEnd = addDays(getWeekStart(lastDayOfMonth), 6);
+  const dates: DateString[] = [];
+  let cursor = calendarStart;
+
+  while (cursor <= calendarEnd) {
+    dates.push(toDateString(cursor));
+    cursor = addDays(cursor, 1);
+  }
+
+  return dates;
+}
+
+export function isSameDate(a: DateString, b: DateString): boolean {
+  return a === b;
+}
+
+export function getWeekdayLabel(dateString: DateString): string {
+  const day = new Date(`${dateString}T00:00:00`).getDay();
+  return WEEKDAYS[day === 0 ? 6 : day - 1];
+}
+
+export function formatDateLabel(dateString: DateString): string {
+  const date = new Date(`${dateString}T00:00:00`);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 export function detectConflicts(shifts: Shift[], employees: Employee[]): Conflict[] {
@@ -46,26 +115,34 @@ export function detectConflicts(shifts: Shift[], employees: Employee[]): Conflic
   }
 
   for (const employee of employees) {
-    const workedDays = new Set(
-      shifts.filter((shift) => shift.employeeId === employee.id).map((shift) => shift.day),
-    );
+    const workedDates = Array.from(
+      new Set(shifts.filter((shift) => shift.employeeId === employee.id).map((shift) => shift.date)),
+    ).sort();
     let consecutive = 0;
     const flaggedDays = new Set<string>();
+    let previousDate: Date | undefined;
 
-    for (const day of DAYS) {
-      if (workedDays.has(day)) {
+    for (const dateString of workedDates) {
+      const currentDate = new Date(`${dateString}T00:00:00`);
+      const gapDays = previousDate
+        ? Math.round((currentDate.getTime() - previousDate.getTime()) / 86_400_000)
+        : 1;
+
+      if (gapDays === 1) {
         consecutive += 1;
-        if (consecutive > 5) {
-          flaggedDays.add(day);
-        }
       } else {
-        consecutive = 0;
+        consecutive = 1;
       }
+
+      if (consecutive > 5) {
+        flaggedDays.add(dateString);
+      }
+      previousDate = currentDate;
     }
 
     if (flaggedDays.size > 0) {
       for (const shift of shifts) {
-        if (shift.employeeId === employee.id && flaggedDays.has(shift.day)) {
+        if (shift.employeeId === employee.id && flaggedDays.has(shift.date)) {
           addConflict(shift.id, {
             shiftId: shift.id,
             type: "too_many_consecutive_days",
@@ -99,4 +176,9 @@ export function calculateWeeklyHours(employees: Employee[], shifts: Shift[]) {
       totalHours,
     };
   });
+}
+
+export function filterShiftsByDateRange(shifts: Shift[], dateStrings: DateString[]): Shift[] {
+  const visibleDates = new Set(dateStrings);
+  return shifts.filter((shift) => visibleDates.has(shift.date));
 }

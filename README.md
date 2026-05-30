@@ -17,9 +17,14 @@ from the published page.
 ## Features
 
 - Add, edit, and delete employees.
-- Store each employee with one or more roles.
-- Add, edit, and delete shifts by employee, day, role, start time, and end time.
-- Display assignments in a weekly grid with employees as rows and days as columns.
+- Store each employee with one or more roles selected from Cashier, Supervisor, Cook, or custom role names.
+- Search and filter the employee list by role, with five employees shown per page.
+- Add, edit, and delete shifts by searchable employee picker, calendar date, start time, and end time.
+- Filter the shift employee picker by role so only employees with that role are shown.
+- Display assignments in a date-based weekly grid with employees as rows and dated weekdays as columns.
+- Jump between weeks with a calendar date picker inside the roster view.
+- Search and filter the roster grid by employee name and role.
+- Paginate the roster grid with up to ten employees per page.
 - Visually flag overlapping shifts for the same employee on the same day.
 - Visually flag shifts once an employee is scheduled more than five consecutive days.
 - Show weekly total hours for every employee.
@@ -38,7 +43,7 @@ type Employee = {
 type Shift = {
   id: string;
   employeeId: string;
-  day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+  date: string; // YYYY-MM-DD
   startTime: string;
   endTime: string;
   role?: string;
@@ -47,8 +52,8 @@ type Shift = {
 
 Conflict detection is implemented in `src/rosterLogic.ts`. The app checks for:
 
-- overlapping shifts for the same employee on the same day
-- more than five consecutive scheduled days
+- overlapping shifts for the same employee on the same calendar date
+- more than five consecutive scheduled calendar dates
 
 ## Local Setup
 

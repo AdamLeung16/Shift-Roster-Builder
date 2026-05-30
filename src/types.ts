@@ -1,6 +1,8 @@
-export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+export const DEFAULT_ROLES = ["Cashier", "Supervisor", "Cook"] as const;
 
-export type Day = (typeof DAYS)[number];
+export type Weekday = (typeof WEEKDAYS)[number];
+export type DateString = `${number}-${number}-${number}`;
 
 export type Employee = {
   id: string;
@@ -11,7 +13,7 @@ export type Employee = {
 export type Shift = {
   id: string;
   employeeId: string;
-  day: Day;
+  date: DateString;
   startTime: string;
   endTime: string;
   role?: string;

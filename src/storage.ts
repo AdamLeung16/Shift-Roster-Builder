@@ -1,6 +1,14 @@
 import type { RosterData } from "./types";
+import { WEEKDAYS, type DateString, type Shift, type Weekday } from "./types";
+import { addDays, getWeekStart, toDateString } from "./rosterLogic";
 
 const STORAGE_KEY = "shift-roster-builder:data";
+
+function dateForCurrentWeekday(day: Weekday): DateString {
+  const weekStart = getWeekStart();
+  const dayIndex = WEEKDAYS.indexOf(day);
+  return toDateString(addDays(weekStart, dayIndex));
+}
 
 export const starterData: RosterData = {
   employees: [
@@ -12,7 +20,7 @@ export const starterData: RosterData = {
     {
       id: "shift-1",
       employeeId: "emp-alex",
-      day: "Mon",
+      date: dateForCurrentWeekday("Mon"),
       startTime: "09:00",
       endTime: "17:00",
       role: "Supervisor",
@@ -20,13 +28,24 @@ export const starterData: RosterData = {
     {
       id: "shift-2",
       employeeId: "emp-jamie",
-      day: "Tue",
+      date: dateForCurrentWeekday("Tue"),
       startTime: "10:00",
       endTime: "16:00",
       role: "Cook",
     },
   ],
 };
+
+function normalizeShift(shift: Shift & { day?: Weekday }): Shift {
+  if (shift.date) {
+    return shift;
+  }
+
+  return {
+    ...shift,
+    date: dateForCurrentWeekday(shift.day ?? "Mon"),
+  };
+}
 
 export function loadRosterData(): RosterData {
   const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -37,7 +56,10 @@ export function loadRosterData(): RosterData {
   try {
     const parsed = JSON.parse(stored) as RosterData;
     if (Array.isArray(parsed.employees) && Array.isArray(parsed.shifts)) {
-      return parsed;
+      return {
+        employees: parsed.employees,
+        shifts: parsed.shifts.map(normalizeShift),
+      };
     }
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);

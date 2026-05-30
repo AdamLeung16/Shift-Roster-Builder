@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   calculateWeeklyHours,
   detectConflicts,
+  filterShiftsByDateRange,
+  getMonthCalendarDates,
+  getMonthWeekStarts,
+  getWeekDates,
+  getWeekStart,
   isValidShiftTime,
   shiftDurationHours,
   shiftsOverlap,
+  toDateString,
 } from "./rosterLogic";
 import type { Employee, Shift } from "./types";
 
@@ -21,7 +27,7 @@ describe("rosterLogic", () => {
     const shift: Shift = {
       id: "shift-1",
       employeeId: "emp-1",
-      day: "Mon",
+      date: "2026-06-01",
       startTime: "09:30",
       endTime: "17:00",
       role: "Cashier",
@@ -33,14 +39,14 @@ describe("rosterLogic", () => {
     const first: Shift = {
       id: "shift-1",
       employeeId: "emp-1",
-      day: "Mon",
+      date: "2026-06-01",
       startTime: "09:00",
       endTime: "13:00",
     };
     const second: Shift = {
       id: "shift-2",
       employeeId: "emp-1",
-      day: "Mon",
+      date: "2026-06-01",
       startTime: "12:00",
       endTime: "16:00",
     };
@@ -53,14 +59,14 @@ describe("rosterLogic", () => {
     const first: Shift = {
       id: "shift-1",
       employeeId: "emp-1",
-      day: "Mon",
+      date: "2026-06-01",
       startTime: "09:00",
       endTime: "13:00",
     };
     const second: Shift = {
       id: "shift-2",
       employeeId: "emp-1",
-      day: "Mon",
+      date: "2026-06-01",
       startTime: "13:00",
       endTime: "17:00",
     };
@@ -75,14 +81,14 @@ describe("rosterLogic", () => {
       {
         id: "shift-1",
         employeeId: "emp-1",
-        day: "Mon",
+        date: "2026-06-01",
         startTime: "09:00",
         endTime: "13:00",
       },
       {
         id: "shift-2",
         employeeId: "emp-2",
-        day: "Mon",
+        date: "2026-06-01",
         startTime: "09:00",
         endTime: "13:00",
       },
@@ -92,10 +98,10 @@ describe("rosterLogic", () => {
   });
 
   it("flags shifts after five consecutive worked days", () => {
-    const shifts: Shift[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => ({
+    const shifts: Shift[] = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-06"].map((date, index) => ({
       id: `shift-${index}`,
       employeeId: "emp-1",
-      day: day as Shift["day"],
+      date: date as Shift["date"],
       startTime: "09:00",
       endTime: "17:00",
     }));
@@ -115,19 +121,80 @@ describe("rosterLogic", () => {
       {
         id: "shift-1",
         employeeId: "emp-1",
-        day: "Mon",
+        date: "2026-06-01",
         startTime: "09:00",
         endTime: "17:00",
       },
       {
         id: "shift-2",
         employeeId: "emp-1",
-        day: "Tue",
+        date: "2026-06-02",
         startTime: "10:00",
         endTime: "15:30",
       },
     ];
 
     expect(calculateWeeklyHours(employees, shifts)[0].totalHours).toBe(13.5);
+  });
+
+  it("builds a Monday-based week and filters shifts into that week", () => {
+    const weekStart = getWeekStart(new Date("2026-06-03T12:00:00"));
+    const weekDates = getWeekDates(weekStart);
+    const shifts: Shift[] = [
+      {
+        id: "shift-1",
+        employeeId: "emp-1",
+        date: "2026-06-01",
+        startTime: "09:00",
+        endTime: "17:00",
+      },
+      {
+        id: "shift-2",
+        employeeId: "emp-1",
+        date: "2026-06-08",
+        startTime: "09:00",
+        endTime: "17:00",
+      },
+    ];
+
+    expect(toDateString(weekStart)).toBe("2026-06-01");
+    expect(weekDates).toEqual([
+      "2026-06-01",
+      "2026-06-02",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-07",
+    ]);
+    expect(filterShiftsByDateRange(shifts, weekDates)).toHaveLength(1);
+  });
+
+  it("lists selectable week starts for a chosen month", () => {
+    expect(getMonthWeekStarts(2026, 4)).toEqual([
+      "2026-04-27",
+      "2026-05-04",
+      "2026-05-11",
+      "2026-05-18",
+      "2026-05-25",
+    ]);
+  });
+
+  it("builds a Monday-starting month calendar grid", () => {
+    const dates = getMonthCalendarDates(2026, 4);
+
+    expect(dates[0]).toBe("2026-04-27");
+    expect(dates.at(-1)).toBe("2026-05-31");
+    expect(dates).toContain("2026-05-01");
+    expect(dates).toContain("2026-05-31");
+    expect(dates.length % 7).toBe(0);
+  });
+
+  it("includes trailing dates for months that end before Sunday", () => {
+    const dates = getMonthCalendarDates(2026, 5);
+
+    expect(dates[0]).toBe("2026-06-01");
+    expect(dates.at(-1)).toBe("2026-07-05");
+    expect(dates).toContain("2026-07-01");
   });
 });
