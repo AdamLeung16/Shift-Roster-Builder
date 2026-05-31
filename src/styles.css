@@ -81,9 +81,10 @@ h2 {
 
 .hero-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  grid-template-columns: repeat(2, minmax(108px, 1fr));
   gap: 10px;
-  min-width: min(380px, 100%);
+  justify-content: end;
+  min-width: min(280px, 100%);
 }
 
 .hero-stats div {
@@ -108,6 +109,14 @@ h2 {
 
 .hero-stats .stat-alert span {
   color: #b42318;
+}
+
+.app-footer {
+  padding: 28px 0 8px;
+  color: #667085;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .toolbar {
@@ -315,6 +324,12 @@ select:focus {
   font-weight: 700;
 }
 
+.warning-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .employee-list,
 .employee-list-controls,
 .hours-list {
@@ -518,6 +533,30 @@ select:focus {
   background: var(--role-bg, #ffffff);
   border-color: var(--role-text, #344054);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--role-border, #cfd8e3) 45%, transparent);
+}
+
+.weekday-choice-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.weekday-choice-list button {
+  min-height: 32px;
+  padding: 6px 11px;
+  color: #344054;
+  background: #ffffff;
+  border: 1px solid #cfd8e3;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.weekday-choice-list button:hover,
+.weekday-choice-list button.active {
+  color: #b42318;
+  background: #fff4f2;
+  border-color: #fda29b;
 }
 
 .employee-options {
@@ -814,6 +853,14 @@ select:focus {
   font-weight: 800;
 }
 
+.availability-note {
+  display: block;
+  margin-top: 7px;
+  color: #667085;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .icon-actions,
 .shift-actions {
   display: flex;
@@ -844,6 +891,12 @@ select:focus {
   font-size: 0.92rem;
 }
 
+.hours-scroll {
+  max-height: 205px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .hours-row,
 .hours-total {
   display: flex;
@@ -855,7 +908,7 @@ select:focus {
 }
 
 .hours-total {
-  margin-top: 4px;
+  margin-top: 0;
   padding-top: 14px;
   border-top: 2px solid #d0d5dd;
   border-bottom: 0;
@@ -930,6 +983,19 @@ select:focus {
 
 .roster-search-field {
   align-self: end;
+}
+
+.roster-export-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 12px;
+}
+
+.roster-drag-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 12px;
 }
 
 .roster-scroll {
@@ -1018,6 +1084,16 @@ select:focus {
   text-align: center;
 }
 
+.shift-drop-cell {
+  background: #f8fafc;
+}
+
+.shift-drop-cell:hover {
+  background: #eefbf8;
+  outline: 2px dashed #9ed8d1;
+  outline-offset: -4px;
+}
+
 .shift-chip {
   display: grid;
   min-width: 0;
@@ -1031,6 +1107,15 @@ select:focus {
   border-radius: 6px;
   background: #f0fdfa;
   text-align: left;
+}
+
+.shift-chip[draggable="true"] {
+  cursor: grab;
+}
+
+.shift-chip.is-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
 }
 
 .shift-chip:hover,

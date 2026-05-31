@@ -8,6 +8,7 @@ export type Employee = {
   id: string;
   name: string;
   roles: string[];
+  unavailableDays: Weekday[];
 };
 
 export type Shift = {

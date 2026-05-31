@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type DragEvent, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -16,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { DEFAULT_ROLES, type DateString, type Employee, type Shift } from "./types";
+import { DEFAULT_ROLES, WEEKDAYS, type DateString, type Employee, type Shift, type Weekday } from "./types";
 import {
   calculateWeeklyHours,
   detectConflicts,
@@ -27,6 +27,7 @@ import {
   getWeekDates,
   getWeekStart,
   getWeekdayLabel,
+  isEmployeeUnavailableOnDate,
   isValidShiftTime,
   toDateString,
 } from "./rosterLogic";
@@ -37,6 +38,7 @@ type EmployeeForm = {
   name: string;
   roles: string[];
   customRole: string;
+  unavailableDays: Weekday[];
 };
 
 type ShiftForm = {
@@ -52,6 +54,7 @@ const emptyEmployeeForm: EmployeeForm = {
   name: "",
   roles: [],
   customRole: "",
+  unavailableDays: [],
 };
 
 type RoleColor = {
@@ -157,6 +160,10 @@ function createRoleColorMap(roles: string[]) {
   return roleColorMap;
 }
 
+function getConflictKey(conflict: { shiftId: string; type: string; message: string }) {
+  return `${conflict.shiftId}:${conflict.type}:${conflict.message}`;
+}
+
 function App() {
   const today = new Date();
   const initialWeekStart = getWeekStart(today);
@@ -190,6 +197,8 @@ function App() {
   const [employeeError, setEmployeeError] = useState("");
   const [shiftError, setShiftError] = useState("");
   const [shiftEditError, setShiftEditError] = useState("");
+  const [draggedShiftId, setDraggedShiftId] = useState<string | null>(null);
+  const [dragError, setDragError] = useState("");
 
   const visibleDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const visibleShifts = useMemo(() => filterShiftsByDateRange(shifts, visibleDates), [shifts, visibleDates]);
@@ -317,6 +326,66 @@ function App() {
       return fallbackRole;
     }
     return employee.roles[0] ?? "";
+  };
+  const getShiftRoleForTargetEmployee = (employee: Employee, fallbackRole = "") => {
+    if (fallbackRole && employee.roles.includes(fallbackRole)) {
+      return fallbackRole;
+    }
+    return employee.roles[0] ?? "";
+  };
+  const getAvailabilityError = (employee: Employee | undefined, date: DateString) => {
+    if (!employee || !isEmployeeUnavailableOnDate(employee, date)) {
+      return "";
+    }
+
+    return `${employee.name} prefers not to work on ${getWeekdayLabel(date)}. Choose another date or employee.`;
+  };
+  const validateShiftMove = (shift: Shift, targetEmployee: Employee, targetDate: DateString) => {
+    const availabilityError = getAvailabilityError(targetEmployee, targetDate);
+    if (availabilityError) {
+      return availabilityError;
+    }
+
+    const nextShifts = shifts.map((item) =>
+      item.id === shift.id
+        ? {
+            ...item,
+            employeeId: targetEmployee.id,
+            date: targetDate,
+            role: getShiftRoleForTargetEmployee(targetEmployee, item.role),
+          }
+        : item,
+    );
+    const existingConflictKeys = new Set(
+      conflicts.filter((conflict) => conflict.shiftId !== shift.id).map(getConflictKey),
+    );
+    const newConflicts = detectConflicts(nextShifts, employees).filter(
+      (conflict) => conflict.shiftId === shift.id || !existingConflictKeys.has(getConflictKey(conflict)),
+    );
+
+    if (newConflicts.length > 0) {
+      return newConflicts[0].message;
+    }
+
+    return "";
+  };
+  const validateShiftSave = (shiftPayload: Shift, employee: Employee | undefined) => {
+    const availabilityError = getAvailabilityError(employee, shiftPayload.date);
+    if (availabilityError) {
+      return availabilityError;
+    }
+
+    const nextShifts = shifts.some((shift) => shift.id === shiftPayload.id)
+      ? shifts.map((shift) => (shift.id === shiftPayload.id ? shiftPayload : shift))
+      : [...shifts, shiftPayload];
+    const existingConflictKeys = new Set(
+      conflicts.filter((conflict) => conflict.shiftId !== shiftPayload.id).map(getConflictKey),
+    );
+    const newConflicts = detectConflicts(nextShifts, employees).filter(
+      (conflict) => conflict.shiftId === shiftPayload.id || !existingConflictKeys.has(getConflictKey(conflict)),
+    );
+
+    return newConflicts[0]?.message ?? "";
   };
 
   useEffect(() => {
@@ -482,6 +551,15 @@ function App() {
     }));
   };
 
+  const toggleUnavailableDay = (day: Weekday) => {
+    setEmployeeForm((form) => ({
+      ...form,
+      unavailableDays: form.unavailableDays.includes(day)
+        ? form.unavailableDays.filter((item) => item !== day)
+        : [...form.unavailableDays, day],
+    }));
+  };
+
   const addCustomRole = () => {
     const role = employeeForm.customRole.trim();
     if (!role) {
@@ -499,6 +577,7 @@ function App() {
     event.preventDefault();
     const name = employeeForm.name.trim();
     const roles = uniqueRoles(employeeForm.roles);
+    const unavailableDays = WEEKDAYS.filter((day) => employeeForm.unavailableDays.includes(day));
 
     if (!name) {
       setEmployeeError("Please enter an employee name.");
@@ -512,7 +591,7 @@ function App() {
     if (employeeForm.id) {
       setEmployees((current) =>
         current.map((employee) =>
-          employee.id === employeeForm.id ? { ...employee, name, roles } : employee,
+          employee.id === employeeForm.id ? { ...employee, name, roles, unavailableDays } : employee,
         ),
       );
       setShifts((current) =>
@@ -523,7 +602,10 @@ function App() {
         ),
       );
     } else {
-      setEmployees((current) => [...current, { id: createId("emp"), name, roles }]);
+      setEmployees((current) => [
+        ...current,
+        { id: createId("emp"), name, roles, unavailableDays },
+      ]);
     }
 
     setEmployeeForm(emptyEmployeeForm);
@@ -537,6 +619,7 @@ function App() {
       name: employee.name,
       roles: employee.roles,
       customRole: "",
+      unavailableDays: employee.unavailableDays,
     });
     setEmployeeError("");
     setIsEmployeeModalOpen(true);
@@ -573,7 +656,6 @@ function App() {
       setShiftError("End time must be later than start time.");
       return;
     }
-
     const shiftPayload: Shift = {
       id: shiftForm.id ?? createId("shift"),
       employeeId: shiftForm.employeeId,
@@ -582,6 +664,11 @@ function App() {
       endTime: shiftForm.endTime,
       role: getShiftRoleForEmployee(selectedEmployee, shiftForm.role),
     };
+    const saveError = validateShiftSave(shiftPayload, selectedEmployee);
+    if (saveError) {
+      setShiftError(saveError);
+      return;
+    }
 
     if (shiftForm.id) {
       setShifts((current) =>
@@ -640,6 +727,11 @@ function App() {
       endTime: shiftEditForm.endTime,
       role: getShiftRoleForEmployee(editEmployee, shiftEditForm.role),
     };
+    const saveError = validateShiftSave(shiftPayload, editEmployee);
+    if (saveError) {
+      setShiftEditError(saveError);
+      return;
+    }
 
     setShifts((current) =>
       current.map((shift) => (shift.id === shiftEditForm.id ? shiftPayload : shift)),
@@ -673,6 +765,63 @@ function App() {
 
     deleteShift(shiftEditForm.id);
     closeShiftModal();
+  };
+
+  const startShiftDrag = (event: DragEvent<HTMLButtonElement>, shiftId: string) => {
+    setDraggedShiftId(shiftId);
+    setDragError("");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", shiftId);
+  };
+
+  const allowShiftDrop = (event: DragEvent<HTMLTableCellElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const dropShift = (event: DragEvent<HTMLTableCellElement>, employee: Employee, date: DateString) => {
+    event.preventDefault();
+    const shiftId = event.dataTransfer.getData("text/plain") || draggedShiftId;
+    if (!shiftId) {
+      return;
+    }
+
+    const shift = shifts.find((item) => item.id === shiftId);
+    if (!shift) {
+      setDraggedShiftId(null);
+      return;
+    }
+
+    if (shift.employeeId === employee.id && shift.date === date) {
+      setDraggedShiftId(null);
+      return;
+    }
+
+    const moveError = validateShiftMove(shift, employee, date);
+    if (moveError) {
+      setDragError(moveError);
+      setDraggedShiftId(null);
+      return;
+    }
+
+    setShifts((current) =>
+      current.map((item) =>
+        item.id === shift.id
+          ? {
+              ...item,
+              employeeId: employee.id,
+              date,
+              role: getShiftRoleForTargetEmployee(employee, item.role),
+            }
+          : item,
+      ),
+    );
+    setDragError("");
+    setDraggedShiftId(null);
+  };
+
+  const endShiftDrag = () => {
+    setDraggedShiftId(null);
   };
 
   const resetDemoData = () => {
@@ -709,22 +858,23 @@ function App() {
     setIsDatePickerOpen(false);
     setIsRosterDatePickerOpen(false);
     setIsShiftEditDatePickerOpen(false);
+    setDraggedShiftId(null);
+    setDragError("");
   };
 
   const exportCsv = () => {
+    const formatShiftForCsv = (shift: Shift) => `${shift.startTime}-${shift.endTime}`;
     const rows = [
-      ["Employee", "Date", "Weekday", "Start", "End", "Role"],
-      ...visibleShifts.map((shift) => {
-        const employee = employees.find((item) => item.id === shift.employeeId);
-        return [
-          employee?.name ?? "Unknown employee",
-          shift.date,
-          getWeekdayLabel(shift.date),
-          shift.startTime,
-          shift.endTime,
-          shift.role ?? "",
-        ];
-      }),
+      ["Employee", ...visibleDates.map((date) => `${getWeekdayLabel(date)} ${formatDateLabel(date)}`)],
+      ...filteredRosterEmployees.map((employee) => [
+        employee.name,
+        ...visibleDates.map((date) => {
+          const dayShifts = visibleShifts
+            .filter((shift) => shift.employeeId === employee.id && shift.date === date)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
+          return dayShifts.map(formatShiftForCsv).join(", ");
+        }),
+      ]),
     ];
     const csv = rows
       .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
@@ -733,7 +883,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `weekly-roster-${visibleDates[0]}.csv`;
+    link.download = `${visibleDates[0]}_to_${visibleDates[6]}_roster.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -742,10 +892,10 @@ function App() {
     <main className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">Core roster task</p>
+          <p className="eyebrow">OPTIX</p>
           <h1>Shift Roster Builder</h1>
           <p className="hero-copy">
-            Build a date-based weekly staff schedule, catch conflicts, and track assigned hours.
+            A data-based wekkly staff schedule.
           </p>
         </div>
         <div className="hero-stats" aria-label="Roster overview">
@@ -757,10 +907,6 @@ function App() {
             <span>{totalShiftCount}</span>
             <small>This Week</small>
           </div>
-          <div className={conflicts.length > 0 ? "stat-alert" : ""}>
-            <span>{conflicts.length}</span>
-            <small>Conflicts</small>
-          </div>
         </div>
       </header>
 
@@ -768,10 +914,6 @@ function App() {
         <button className="secondary-button" type="button" onClick={resetDemoData}>
           <RefreshCcw size={16} />
           Reset demo data
-        </button>
-        <button className="secondary-button" type="button" onClick={exportCsv}>
-          <Download size={16} />
-          Export CSV
         </button>
       </section>
 
@@ -842,6 +984,11 @@ function App() {
                           </span>
                         ))}
                       </div>
+                      {employee.unavailableDays.length > 0 ? (
+                        <small className="availability-note">
+                          Prefers off: {employee.unavailableDays.join(", ")}
+                        </small>
+                      ) : null}
                     </div>
                     <div className="icon-actions">
                       <button
@@ -907,19 +1054,23 @@ function App() {
               <h2>Weekly Hours</h2>
             </div>
             <div className="hours-list">
-              {weeklyHours.map((item) => (
-                <div className="hours-row" key={item.employeeId}>
-                  <span>{item.name}</span>
-                  <strong>{formatHours(item.totalHours)}h</strong>
-                </div>
-              ))}
               {weeklyHours.length === 0 ? (
                 <p className="empty-state">Hours will appear after employees are added.</p>
               ) : (
-                <div className="hours-total">
-                  <span>Total assigned</span>
-                  <strong>{formatHours(totalHours)}h</strong>
-                </div>
+                <>
+                  <div className="hours-scroll" aria-label="Weekly employee hours">
+                    {weeklyHours.map((item) => (
+                      <div className="hours-row" key={item.employeeId}>
+                        <span>{item.name}</span>
+                        <strong>{formatHours(item.totalHours)}h</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hours-total">
+                    <span>Total assigned</span>
+                    <strong>{formatHours(totalHours)}h</strong>
+                  </div>
+                </>
               )}
             </div>
           </section>
@@ -1106,7 +1257,12 @@ function App() {
                 ) : null}
               </div>
             </form>
-            {shiftError ? <p className="form-error">{shiftError}</p> : null}
+            {shiftError ? (
+              <p className="form-error warning-message">
+                <AlertTriangle size={14} />
+                {shiftError}
+              </p>
+            ) : null}
           </section>
 
           <section className="panel roster-panel">
@@ -1219,6 +1375,18 @@ function App() {
                 />
               </label>
             </div>
+            <div className="roster-export-row">
+              <button className="secondary-button" type="button" onClick={exportCsv}>
+                <Download size={16} />
+                Export CSV
+              </button>
+            </div>
+            {dragError ? (
+              <p className="form-error roster-drag-error">
+                <AlertTriangle size={14} />
+                {dragError}
+              </p>
+            ) : null}
             <div className="roster-scroll">
               <table className="roster-grid">
                 <thead>
@@ -1264,7 +1432,12 @@ function App() {
                             .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
                           return (
-                            <td key={date}>
+                            <td
+                              className={draggedShiftId ? "shift-drop-cell" : ""}
+                              key={date}
+                              onDragOver={allowShiftDrop}
+                              onDrop={(event) => dropShift(event, employee, date)}
+                            >
                               {dayShifts.length === 0 ? (
                                 <span className="no-shift">-</span>
                               ) : (
@@ -1274,11 +1447,14 @@ function App() {
                                     <button
                                       className={`shift-chip ${
                                         shiftConflicts.length > 0 ? "has-conflict" : ""
-                                      }`}
+                                      } ${draggedShiftId === shift.id ? "is-dragging" : ""}`}
                                       key={shift.id}
                                       type="button"
+                                      draggable
                                       aria-label={`Open shift ${shift.startTime}-${shift.endTime}`}
-                                      title="Open shift"
+                                      title="Drag to move, click to edit"
+                                      onDragStart={(event) => startShiftDrag(event, shift.id)}
+                                      onDragEnd={endShiftDrag}
                                       onClick={() => editShift(shift)}
                                     >
                                       <strong className="shift-time">
@@ -1423,6 +1599,21 @@ function App() {
                   </div>
                 </div>
               </div>
+              <div className="field-group">
+                <span className="field-label">Preferred days off</span>
+                <div className="weekday-choice-list" aria-label="Preferred days off">
+                  {WEEKDAYS.map((day) => (
+                    <button
+                      className={employeeForm.unavailableDays.includes(day) ? "active" : ""}
+                      key={day}
+                      type="button"
+                      onClick={() => toggleUnavailableDay(day)}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {employeeError ? <p className="form-error">{employeeError}</p> : null}
               <div className="form-actions">
                 <button className="primary-button" type="submit">
@@ -1554,7 +1745,12 @@ function App() {
                   }
                 />
               </label>
-              {shiftEditError ? <p className="form-error">{shiftEditError}</p> : null}
+              {shiftEditError ? (
+                <p className="form-error warning-message">
+                  <AlertTriangle size={14} />
+                  {shiftEditError}
+                </p>
+              ) : null}
               <div className="modal-footer-actions">
                 <button className="danger-button" type="button" onClick={confirmDeleteShift}>
                   <Trash2 size={16} />
@@ -1574,6 +1770,7 @@ function App() {
           </section>
         </div>
       ) : null}
+      <footer className="app-footer">Designed by Adam Leung</footer>
     </main>
   );
 }

@@ -1,4 +1,4 @@
-import { WEEKDAYS, type Conflict, type DateString, type Employee, type Shift } from "./types";
+import { WEEKDAYS, type Conflict, type DateString, type Employee, type Shift, type Weekday } from "./types";
 
 export function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
@@ -84,6 +84,10 @@ export function isSameDate(a: DateString, b: DateString): boolean {
 export function getWeekdayLabel(dateString: DateString): string {
   const day = new Date(`${dateString}T00:00:00`).getDay();
   return WEEKDAYS[day === 0 ? 6 : day - 1];
+}
+
+export function isEmployeeUnavailableOnDate(employee: Employee, dateString: DateString): boolean {
+  return employee.unavailableDays.includes(getWeekdayLabel(dateString) as Weekday);
 }
 
 export function formatDateLabel(dateString: DateString): string {

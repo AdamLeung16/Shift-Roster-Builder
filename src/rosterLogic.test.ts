@@ -7,14 +7,16 @@ import {
   getMonthWeekStarts,
   getWeekDates,
   getWeekStart,
+  isEmployeeUnavailableOnDate,
   isValidShiftTime,
   shiftDurationHours,
   shiftsOverlap,
   toDateString,
 } from "./rosterLogic";
-import type { Employee, Shift } from "./types";
+import { WEEKDAYS, type Employee, type Shift } from "./types";
+import { starterData } from "./storage";
 
-const employees: Employee[] = [{ id: "emp-1", name: "Alex", roles: ["Cashier"] }];
+const employees: Employee[] = [{ id: "emp-1", name: "Alex", roles: ["Cashier"], unavailableDays: [] }];
 
 describe("rosterLogic", () => {
   it("validates shift times", () => {
@@ -76,7 +78,7 @@ describe("rosterLogic", () => {
   });
 
   it("does not flag same-time shifts for different employees", () => {
-    const secondEmployee = { id: "emp-2", name: "Jamie", roles: ["Cook"] };
+    const secondEmployee = { id: "emp-2", name: "Jamie", roles: ["Cook"], unavailableDays: [] };
     const shifts: Shift[] = [
       {
         id: "shift-1",
@@ -196,5 +198,53 @@ describe("rosterLogic", () => {
     expect(dates[0]).toBe("2026-06-01");
     expect(dates.at(-1)).toBe("2026-07-05");
     expect(dates).toContain("2026-07-01");
+  });
+
+  it("checks employee unavailable weekdays against a concrete date", () => {
+    const employee: Employee = {
+      id: "emp-2",
+      name: "Jamie",
+      roles: ["Cook"],
+      unavailableDays: ["Tue"],
+    };
+
+    expect(isEmployeeUnavailableOnDate(employee, "2026-06-02")).toBe(true);
+    expect(isEmployeeUnavailableOnDate(employee, "2026-06-03")).toBe(false);
+  });
+
+  it("provides a 20-person starter team with valid roles and preferred days off", () => {
+    const roleSet = new Set(starterData.employees.flatMap((employee) => employee.roles));
+    const weekdaySet = new Set(WEEKDAYS);
+
+    expect(starterData.employees).toHaveLength(20);
+    expect(roleSet.has("Cashier")).toBe(true);
+    expect(roleSet.has("Supervisor")).toBe(true);
+    expect(roleSet.has("Cook")).toBe(true);
+
+    for (const employee of starterData.employees) {
+      expect(employee.roles.length).toBeGreaterThanOrEqual(1);
+      expect(employee.roles.length).toBeLessThanOrEqual(3);
+      expect(employee.roles.every((role) => role.trim().length > 0)).toBe(true);
+      expect(employee.unavailableDays.length).toBeLessThanOrEqual(2);
+      expect(employee.unavailableDays.every((day) => weekdaySet.has(day))).toBe(true);
+    }
+  });
+
+  it("provides conflict-free starter shifts for the current week", () => {
+    const employeeById = new Map(starterData.employees.map((employee) => [employee.id, employee]));
+    const weekDates = new Set(getWeekDates(getWeekStart()));
+
+    expect(starterData.shifts.length).toBeGreaterThan(0);
+    expect(detectConflicts(starterData.shifts, starterData.employees)).toHaveLength(0);
+
+    for (const shift of starterData.shifts) {
+      const employee = employeeById.get(shift.employeeId);
+
+      expect(weekDates.has(shift.date)).toBe(true);
+      expect(employee).toBeDefined();
+      expect(isValidShiftTime(shift.startTime, shift.endTime)).toBe(true);
+      expect(employee?.roles.includes(shift.role ?? "")).toBe(true);
+      expect(employee && isEmployeeUnavailableOnDate(employee, shift.date)).toBe(false);
+    }
   });
 });
