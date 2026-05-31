@@ -2,6 +2,8 @@
 
 Shift Roster Builder is a static React web app for building and validating a weekly staff schedule. It is designed for a small operations team where managers need to manage employees, assign shifts, check scheduling rules, review weekly hours, and export the visible roster as a CSV file.
 
+[Open the deployed GitHub Pages app](https://adamleung16.github.io/Shift-Roster-Builder/)
+
 ![Shift Roster Builder running in the browser](docs/app-screenshot.png)
 
 ## Setup
