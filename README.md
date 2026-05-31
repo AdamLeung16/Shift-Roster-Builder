@@ -1,35 +1,70 @@
-## Shift Roster Builder
+# Shift Roster Builder
 
-A small React web app for building a weekly staff roster. Managers can add employees,
-assign shifts, view the week in a grid, catch scheduling conflicts, and track weekly
-hours per employee.
+Shift Roster Builder is a static React web app for building and validating a weekly staff schedule. It is designed for a small operations team where managers need to manage employees, assign shifts, check scheduling rules, review weekly hours, and export the visible roster as a CSV file.
 
-## Tech Stack
+![Shift Roster Builder running in the browser](docs/app-screenshot.png)
 
-- React + Vite for a fast single-page frontend.
-- TypeScript for clear roster data models and safer business logic.
-- localStorage for simple browser persistence with no backend.
-- Vitest for focused tests around time calculations and conflict detection.
+## Setup
 
-This is a static frontend app, so it can be deployed to GitHub Pages and used directly
-from the published page.
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the development server:
+
+```bash
+npm run dev
+```
+
+Build the production version:
+
+```bash
+npm run build
+```
+
+Run the test suite:
+
+```bash
+npm run test
+```
 
 ## Features
 
-- Add, edit, and delete employees.
-- Store each employee with one or more roles selected from Cashier, Supervisor, Cook, or custom role names.
-- Search and filter the employee list by role, with five employees shown per page.
-- Add, edit, and delete shifts by searchable employee picker, calendar date, start time, and end time.
-- Filter the shift employee picker by role so only employees with that role are shown.
-- Display assignments in a date-based weekly grid with employees as rows and dated weekdays as columns.
-- Jump between weeks with a calendar date picker inside the roster view.
-- Search and filter the roster grid by employee name and role.
-- Paginate the roster grid with up to ten employees per page.
-- Visually flag overlapping shifts for the same employee on the same day.
-- Visually flag shifts once an employee is scheduled more than five consecutive days.
-- Show weekly total hours for every employee.
-- Save roster data in localStorage so the page keeps data after refresh.
-- Export the weekly roster to CSV.
+- Manage employees with names, multiple roles, and preferred days off.
+- Use default roles such as `Cashier`, `Supervisor`, and `Cook`, plus custom roles.
+- Assign shifts by employee, calendar date, start time, and end time.
+- View the current week in a roster grid with employees as rows and dated weekdays as columns.
+- Search and filter employees and the roster by name or role.
+- Drag shift cards across the weekly grid to reassign employees or dates.
+- Validate shifts before saving or dragging:
+  - no overlapping shifts for the same employee on the same day
+  - no more than five consecutive working days
+  - no scheduling on an employee's preferred days off
+- Track weekly hours and total assigned hours.
+- Export the currently filtered weekly roster grid to CSV.
+- Reset to a 20-person demo team with a prebuilt conflict-free weekly schedule.
+
+## Data Storage
+
+This project has no backend, database, or login system. All roster data is stored in the browser with `localStorage`.
+
+That means:
+
+- Refreshing the page keeps the current roster data.
+- Clicking `Reset demo data` clears the saved roster and restores the built-in demo.
+- Data is local to the browser and device where the app is opened.
+- The deployed GitHub Pages version works as a fully static app.
+
+## Design Decisions
+
+- **React + Vite + TypeScript**: chosen for a fast static frontend, simple GitHub Pages deployment, and safer roster logic through typed models.
+- **localStorage persistence**: keeps the app usable without a server while still preserving work after refresh.
+- **Date-based scheduling**: shifts use concrete `YYYY-MM-DD` dates instead of only weekday names, so the roster can move between weeks.
+- **Pre-save validation**: invalid assignments are blocked before they enter the grid, instead of relying only on visual conflict warnings after the fact.
+- **Practical operations UI**: the app prioritizes dense, scannable controls over a marketing-style layout because managers need to compare employees, dates, shifts, and hours quickly.
+- **Fixed demo data**: the demo looks varied but is deterministic, so screenshots, tests, and grading behavior stay consistent.
 
 ## Data Model
 
@@ -38,51 +73,27 @@ type Employee = {
   id: string;
   name: string;
   roles: string[];
+  unavailableDays: Weekday[];
 };
 
 type Shift = {
   id: string;
   employeeId: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   startTime: string;
   endTime: string;
   role?: string;
 };
 ```
 
-Conflict detection is implemented in `src/rosterLogic.ts`. The app checks for:
-
-- overlapping shifts for the same employee on the same calendar date
-- more than five consecutive scheduled calendar dates
-
-## Local Setup
-
-```bash
-npm install
-npm run dev
-```
-
-Then open the local URL shown in the terminal.
-
-## Verification
-
-```bash
-npm run test
-npm run build
-```
+Core roster calculations and conflict checks are implemented in `src/rosterLogic.ts`.
 
 ## GitHub Pages
 
-The Vite `base` option is configured for a repository named `Shift-Roster-Builder`:
+The Vite base path is configured for this repository:
 
 ```ts
 base: "/Shift-Roster-Builder/"
 ```
 
-After pushing to GitHub, enable GitHub Pages with a build workflow or publish the `dist`
-folder. The deployed page will support the full app because all data and logic run in
-the browser.
-
-## Screenshot
-
-Add a screenshot or short screen recording here before final submission.
+After building and deploying the static output, the GitHub Pages site can run all features directly in the browser because the app does not depend on a backend service.
